@@ -1,0 +1,51 @@
+#------------------------------------------------------------------------------
+# usage: configure tutor AWS SES smtp email service
+#------------------------------------------------------------------------------
+name: Open edX Tutor k8s configure AWS SES service
+description: Github Action to use Tutor to configure AWS SES smtp email service for use with Open edX running on AWS EKS Kubernetes
+branding:
+  icon: 'cloud'
+  color: 'orange'
+inputs:
+  namespace:
+    description: 'The Kubernetes namespace to which the Open edX platform environment will be deployed. Example: openedx-prod'
+    required: true
+    type: string
+runs:
+  using: "composite"
+  steps:
+    # ---------------------------------------------------------------------------------
+    # retrieve the AWS SES SMTP email connection parameters that we created in Terraform
+    # and then stored in Kubernetes secrets. These include (example data):
+    #
+    #  SMTP_HOST=email-smtp.us-east-2.amazonaws.com
+    #  SMTP_PORT=587
+    #  SMTP_USE_SSL=false
+    #  SMTP_USE_TLS=true
+    #  SMTP_USERNAME=YOUR-AWS_IAM_USERNAME_KEY
+    #  SMTP_PASSWORD=YOUR-AWS_IAM_USERNAME_SECRET
+    # ---------------------------------------------------------------------------------
+    - name: fetch AWS SES SMTP configuration from Kubernetes secrets
+      id: get-ses-secret
+      uses: openedx-actions/tutor-k8s-get-secret@v1
+      with:
+        eks-namespace: ${{ inputs.namespace }}
+        eks-secret-name: aws-ses-config
+
+    - name: Configure remote SMTP service - AWS SES
+      id: configure-tutor
+      shell: bash
+      run: |-
+        tutor config save --set RUN_SMTP=false \
+                          --set SMTP_BACKEND="django.core.mail.backends.smtp.EmailBackend" \
+                          --set SMTP_HOST=${{ env.TUTOR_SMTP_HOST }} \
+                          --set SMTP_PORT=${{ env.TUTOR_SMTP_PORT }} \
+                          --set SMTP_USE_SSL=${{ env.TUTOR_SMTP_USE_SSL }} \
+                          --set SMTP_USE_TLS=${{ env.TUTOR_SMTP_USE_TLS }} \
+                          --set SMTP_HOST_USER=${{ env.TUTOR_SMTP_USERNAME }} \
+                          --set SMTP_HOST_PASSWORD=${{ env.TUTOR_SMTP_PASSWORD }} \
+
+    - name: save tutor configuration
+      id: save-config
+      shell: bash
+      run: tutor config save
